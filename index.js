@@ -61,6 +61,11 @@ app.get("/", (req, res) => {
   res.send("SP Digital Lab Management System Backend is Running");
 });
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", message: "Backend is running" });
+});
+
 // 404 Route Handler
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
