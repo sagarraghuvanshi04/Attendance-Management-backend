@@ -30,9 +30,10 @@ const app = express();
 // ------------------ MIDDLEWARE ------------------
 app.use(
   cors({
-    origin: "*", 
+    origin: ["https://library-management-frontend-three-chi.vercel.app", "http://localhost:5173", "http://localhost:3000"],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: true,
   })
 );
 
