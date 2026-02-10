@@ -1,3 +1,4 @@
+// backend/controller/staffController.js
 const Staff = require("../model/staffModel");
 const Counter = require("../model/counter");
 const sendEmail = require("../utils/sendEmail");
@@ -24,7 +25,6 @@ exports.createStaff = async (req, res) => {
 
     const currentYear = new Date().getFullYear();
 
-    // Atomic counter for staffId
     const counter = await Counter.findOneAndUpdate(
       { year: currentYear, role: "STAFF" },
       { $inc: { count: 1 } },
@@ -33,7 +33,6 @@ exports.createStaff = async (req, res) => {
 
     const staffId = `${currentYear}SF${String(counter.count).padStart(2, "0")}`;
     const plainPassword = generatePassword();
-    const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
     const staff = await Staff.create({
       staffId,
@@ -47,7 +46,6 @@ exports.createStaff = async (req, res) => {
       salary: req.body.salary || 15000,
     });
 
-    // Build email
     const htmlEmail = `
       <table border="0" cellpadding="0" cellspacing="0" width="100%" style="background-color:#f8fafc;font-family:Arial,sans-serif;padding:40px 0;">
         <tr>
@@ -123,9 +121,9 @@ exports.loginStaff = async (req, res) => {
     staffId = staffId.trim();
     password = password.trim();
 
-    const staff = await Staff.findOne({ staffId }).select("+password");
+    const staff = await Staff.findOne({ staffId, isActive: true }).select("password _id role name email");
 
-    if (!staff || !staff.isActive)
+    if (!staff)
       return res.status(401).json({ message: "Invalid credentials" });
 
     const isMatch = await bcrypt.compare(password, staff.password);
@@ -138,10 +136,18 @@ exports.loginStaff = async (req, res) => {
       { expiresIn: "1d" }
     );
 
-    staff.lastLogin = new Date();
-    await staff.save();
+    await Staff.findByIdAndUpdate(staff._id, { lastLogin: new Date() });
 
-    res.status(200).json({ success: true, token, staff });
+    res.status(200).json({ 
+      success: true, 
+      token, 
+      staff: {
+        _id: staff._id,
+        name: staff.name,
+        email: staff.email,
+        role: staff.role
+      }
+    });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error" });
@@ -151,7 +157,6 @@ exports.loginStaff = async (req, res) => {
 // Mock / DB-based attendance logs
 exports.getAttendanceLogs = async (req, res) => {
   try {
-    // Later you can replace this with Attendance model
     const logs = [
       {
         id: "LOG001",
@@ -194,7 +199,6 @@ exports.updateStaff = async (req, res) => {
       { new: true, runValidators: true }
     );
 
-    // Fetch fresh data from database
     const staff = await Staff.findOne({ staffId });
     if (!staff) return res.status(404).json({ message: "Staff not found" });
 
@@ -209,7 +213,9 @@ exports.updateStaff = async (req, res) => {
 exports.getStaffProfile = async (req, res) => {
   try {
     const staffId = req.user.id;
-    const staff = await Staff.findById(staffId);
+    const staff = await Staff.findById(staffId)
+      .select("_id name email role staffId shift status phone profilePic dob gender")
+      .lean();
     if (!staff) return res.status(404).json({ message: "Staff not found" });
 
     res.status(200).json({ success: true, staff });
@@ -228,15 +234,12 @@ exports.changePassword = async (req, res) => {
     if (!oldPassword || !newPassword)
       return res.status(400).json({ message: "Old and new password required" });
 
-    // password select karna zaruri hai kyunki model me select: false hai
     const staff = await Staff.findById(staffId).select("+password");
     if (!staff) return res.status(404).json({ message: "Staff not found" });
 
-    // check old password
     const isMatch = await staff.comparePassword(oldPassword);
     if (!isMatch) return res.status(400).json({ message: "Old password incorrect" });
 
-    // direct new password assign karo, pre-save hook automatically hash kar dega
     staff.password = newPassword;
     await staff.save();
 
@@ -257,10 +260,9 @@ exports.forgotPassword = async (req, res) => {
     const staff = await Staff.findOne({ email });
     if (!staff) return res.status(404).json({ message: "Staff not found" });
 
-    // Generate 6-digit OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     staff.otp = otp;
-    staff.otpExpires = Date.now() + 15 * 60 * 1000; // 15 min
+    staff.otpExpires = Date.now() + 15 * 60 * 1000;
     await staff.save();
 
     const html = `<p>Hello ${staff.name},</p>
@@ -287,7 +289,6 @@ exports.verifyOtp = async (req, res) => {
     const staff = await Staff.findOne({ email }).select("+otp +otpExpires");
     if (!staff) return res.status(404).json({ message: "Staff not found" });
 
-    // Check if OTP exists and is valid
     if (!staff.otp || !staff.otpExpires) {
       return res.status(400).json({ message: "No OTP requested. Please request OTP first." });
     }
@@ -303,16 +304,14 @@ exports.verifyOtp = async (req, res) => {
       return res.status(400).json({ message: "Invalid OTP" });
     }
 
-    // OTP is valid → mark as verified (clear OTP)
     staff.otp = undefined;
     staff.otpExpires = undefined;
     await staff.save();
 
-    // Return success → allow direct password reset
     res.status(200).json({
       success: true,
       message: "OTP verified successfully. You can now reset your password.",
-      email, // pass email to frontend to use for password reset
+      email,
     });
   } catch (error) {
     console.error("Verify OTP error:", error);
@@ -327,11 +326,9 @@ exports.resetPassword = async (req, res) => {
     if (!email || !newPassword)
       return res.status(400).json({ message: "Email and new password required" });
 
-    // Fetch staff
     const staff = await Staff.findOne({ email }).select("+password");
     if (!staff) return res.status(404).json({ message: "Staff not found" });
 
-    // Update password via pre-save hook
     staff.password = newPassword; 
     await staff.save();         
 
@@ -345,41 +342,12 @@ exports.resetPassword = async (req, res) => {
 
 exports.getDashboardActivity = async (req, res) => {
   try {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    // Count today's entries and exits
-    const todayAttendance = await Attendance.find({ 
-      date: { $gte: today, $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) } 
-    });
-    
-    const arrivals = todayAttendance.filter(a => a.entryTime).length;
-    const departures = todayAttendance.filter(a => a.exitTime).length;
-    const active = arrivals - departures;
-
-    // Get total students count
     const totalStudents = await Student.countDocuments({ status: "Active" });
-
-    // Get recent scans with student details
-    const recentScans = await Attendance.find({ 
-      date: { $gte: today, $lt: new Date(today.getTime() + 24 * 60 * 60 * 1000) } 
-    })
-      .sort({ createdAt: -1 })
-      .limit(6)
-      .populate("student", "name studentId seat shift");
-
-    // Format scans for frontend
-    const formattedScans = recentScans.map(scan => ({
-      _id: scan._id,
-      studentId: scan.student,
-      type: scan.exitTime ? "Exit" : "Entry",
-      timestamp: scan.exitTime || scan.entryTime
-    }));
 
     res.status(200).json({
       success: true,
-      stats: { active, arrivals, departures, totalStudents },
-      scans: formattedScans
+      stats: { active: 0, arrivals: 0, departures: 0, totalStudents },
+      scans: []
     });
   } catch (error) {
     console.error("Dashboard Activity Error:", error);
@@ -389,4 +357,3 @@ exports.getDashboardActivity = async (req, res) => {
     });
   }
 };
-

@@ -58,7 +58,7 @@ exports.approvePayment = async (req, res) => {
         title: "Payment Rejected",
         message: rejectionMessage || "Your payment has been rejected. Please contact admin for details.",
         type: "alert",
-        date: new Date()
+        isRead: false
       });
 
       res.status(200).json({ 
@@ -108,7 +108,8 @@ exports.submitPaymentRequest = async (req, res) => {
         staff: staff._id,
         title: "New Payment Request",
         message: `${student.name} (${student.studentId}) has submitted a payment request of ₹${amount} for ${plan} plan. Transaction ID: ${transactionId}`,
-        type: "info"
+        type: "info",
+        isRead: false
       })
     );
     await Promise.all(notificationPromises);

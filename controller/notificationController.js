@@ -6,7 +6,6 @@ exports.createNotification = async (req, res) => {
     const { title, message, type } = req.body;
     const staffId = req.user.id;
 
-    // If only message is provided, use default title
     const notificationTitle = title || "Library Announcement";
     const notificationMessage = message || req.body.message;
 
@@ -19,6 +18,7 @@ exports.createNotification = async (req, res) => {
       message: notificationMessage,
       type: type || "announcement",
       createdBy: staffId,
+      isRead: false,
     });
 
     res.status(201).json({
@@ -32,22 +32,24 @@ exports.createNotification = async (req, res) => {
   }
 };
 
-// Get all active notifications (Students)
+// Get all active notifications
 exports.getNotifications = async (req, res) => {
   try {
-    const studentId = req.user?.id;
+    const userRole = req.user?.role;
+    const userId = req.user?.id;
     
-    // Get both broadcast notifications (no student field) and student-specific notifications
-    const notifications = await Notification.find({ 
-      isActive: true,
-      $or: [
-        { student: { $exists: false } },
-        { student: null },
-        { student: studentId }
-      ]
-    })
+    let query = { isActive: true };
+    
+    // For students: show all broadcast notifications (no createdBy filter needed)
+    // For staff/admin: show all notifications
+    if (userRole === "STUDENT") {
+      query = { isActive: true };
+    }
+    
+    const notifications = await Notification.find(query)
+      .select("_id title message type createdAt isRead createdBy")
       .sort({ createdAt: -1 })
-      .limit(20)
+      .limit(50)
       .populate("createdBy", "name staffId");
 
     res.status(200).json({
@@ -82,5 +84,30 @@ exports.deleteNotification = async (req, res) => {
   } catch (error) {
     console.error("Delete notification error:", error);
     res.status(500).json({ message: "Failed to delete notification" });
+  }
+};
+
+
+// Mark notification as read
+exports.markAsRead = async (req, res) => {
+  try {
+    const { notificationIds } = req.body;
+
+    if (!notificationIds || !Array.isArray(notificationIds)) {
+      return res.status(400).json({ message: "notificationIds array required" });
+    }
+
+    await Notification.updateMany(
+      { _id: { $in: notificationIds } },
+      { isRead: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Notifications marked as read",
+    });
+  } catch (error) {
+    console.error("Mark as read error:", error);
+    res.status(500).json({ message: "Failed to mark notifications as read" });
   }
 };

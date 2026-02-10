@@ -119,6 +119,13 @@ connectToDb()
     });
     console.log("✅ Cron job scheduled: Auto absent marking at 12 PM daily");
     
+    // Setup cron job - Auto exit at 6 PM daily
+    cron.schedule("0 18 * * *", async () => {
+      const { autoExitAtClosingTime } = require("./controller/attendanceController");
+      await autoExitAtClosingTime();
+    });
+    console.log("✅ Cron job scheduled: Auto exit at 6 PM daily");
+    
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });
@@ -127,6 +134,3 @@ connectToDb()
     console.error("Failed to connect to DB:", err);
     process.exit(1);
   });
-
-
-  

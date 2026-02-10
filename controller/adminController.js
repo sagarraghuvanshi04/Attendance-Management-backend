@@ -1,5 +1,3 @@
-// backend/controller/adminController.js
-
 const Staff = require("../model/staffModel");
 const Student = require("../model/studentModel");
 const Payment = require("../model/paymentModel");
@@ -15,7 +13,6 @@ exports.loginAdmin = async (req, res) => {
       return res.status(400).json({ message: "AdminId and password required" });
     }
 
-    // Include password because schema hides it
     const admin = await Staff.findOne({
       staffId: adminId,
       role: "ADMIN",
@@ -66,15 +63,13 @@ exports.getReportsData = async (req, res) => {
     if (timeRange === "Last 30 Days") {
       startDate = new Date(today);
       startDate.setDate(startDate.getDate() - 30);
-      dataPoints = 4; // 4 weeks
+      dataPoints = 4;
     } else {
-      // Last 6 Months
       startDate = new Date(today);
       startDate.setMonth(startDate.getMonth() - 6);
       dataPoints = 6;
     }
 
-    // Generate chart data
     const chartData = [];
     for (let i = 0; i < dataPoints; i++) {
       let periodStart, periodEnd, label;
@@ -109,7 +104,6 @@ exports.getReportsData = async (req, res) => {
       });
     }
 
-    // Plan distribution
     const fullDay = await Student.countDocuments({ shift: "Full Day (8 AM - 8 PM)" });
     const morning = await Student.countDocuments({ shift: "Morning (8 AM - 2 PM)" });
     const evening = await Student.countDocuments({ shift: "Evening (2 PM - 8 PM)" });
@@ -121,10 +115,8 @@ exports.getReportsData = async (req, res) => {
       { name: "Evening", value: Math.round((evening / total) * 100), color: "#F59E0B" },
     ];
 
-    // KPI calculations
     const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0);
 
     const currentRevenue = await Payment.aggregate([
       { $match: { createdAt: { $gte: currentMonth } } },
@@ -173,20 +165,16 @@ exports.getDashboardStats = async (req, res) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Total students
     const totalStudents = await Student.countDocuments();
 
-    // Active students (currently in library)
     const activeStudents = await Attendance.countDocuments({
       date: today,
       entryTime: { $exists: true },
       exitTime: { $exists: false },
     });
 
-    // Total staff (excluding admin)
     const totalStaff = await Staff.countDocuments({ role: { $ne: "ADMIN" }, isActive: true });
 
-    // Revenue for current month
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     const revenueThisMonth = await Payment.aggregate([
       { $match: { createdAt: { $gte: startOfMonth } } },
@@ -194,51 +182,20 @@ exports.getDashboardStats = async (req, res) => {
     ]);
     const revenue = revenueThisMonth[0]?.total || 0;
 
-    // Today's revenue
     const todayRevenue = await Payment.aggregate([
       { $match: { createdAt: { $gte: today } } },
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
     const todayRevenueAmount = todayRevenue[0]?.total || 0;
 
-    // Today's attendance count
     const todayAttendance = await Attendance.countDocuments({ date: today });
 
-    // Available seats
     const totalSeats = 60;
-    
-    // Occupied seats list
-    const occupiedSeats = await Student.find({ status: "Active" })
-      .select('seat')
-      .lean();
-    const occupiedSeatNumbers = occupiedSeats.map(s => s.seat).filter(Boolean);
-    console.log("Total Active Students:", await Student.countDocuments({ status: "Active" }));
-    console.log("Occupied Seats Array:", occupiedSeatNumbers);
-    
-    const availableSeats = totalSeats - occupiedSeatNumbers.length;
-    console.log("Available Seats Calculation:", availableSeats);
+    const occupiedStudents = await Student.find({ status: "Active", seat: { $exists: true, $ne: "" } }).select("seat");
+    const occupiedSeats = occupiedStudents.map(s => s.seat);
+    const occupiedCount = occupiedSeats.length;
+    const availableSeats = totalSeats - occupiedCount;
 
-    // Recent students (last 5)
-    const recentStudents = await Student.find()
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .select('studentId name email createdAt isActive');
-
-    // Recent payments (last 5)
-    const recentPayments = await Payment.find()
-      .populate('student', 'studentId name')
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .select('amount method createdAt');
-
-    // Recent attendance (last 10)
-    const recentAttendance = await Attendance.find()
-      .populate('student', 'studentId name')
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .select('student entryTime exitTime date workingHours');
-
-    // Last 7 days revenue chart data
     const last7Days = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
@@ -257,7 +214,6 @@ exports.getDashboardStats = async (req, res) => {
       });
     }
 
-    // Last 7 days attendance chart data
     const last7DaysAttendance = [];
     for (let i = 6; i >= 0; i--) {
       const date = new Date(today);
@@ -279,14 +235,11 @@ exports.getDashboardStats = async (req, res) => {
         totalStaff,
         revenue,
         availableSeats,
+        occupiedSeats,
         todayRevenue: todayRevenueAmount,
         todayAttendance,
         totalSeats,
-        occupiedSeats: occupiedSeatNumbers,
       },
-      recentStudents,
-      recentPayments,
-      recentAttendance,
       charts: {
         revenueChart: last7Days,
         attendanceChart: last7DaysAttendance,

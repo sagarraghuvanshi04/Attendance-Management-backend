@@ -4,11 +4,15 @@ const {
   createNotification,
   getNotifications,
   deleteNotification,
+  markAsRead,
 } = require("../controller/notificationController");
 const authMiddleware = require("../middleware/authMiddleware");
 
 // Students - Get all notifications (must be first)
 router.get("/", authMiddleware(["STUDENT", "STAFF", "ADMIN"]), getNotifications);
+
+// Mark notifications as read
+router.post("/mark-read", authMiddleware(["STUDENT", "STAFF", "ADMIN"]), markAsRead);
 
 // Staff/Admin - Broadcast to all students
 router.post("/broadcast", authMiddleware(["STAFF", "ADMIN"]), createNotification);

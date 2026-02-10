@@ -81,6 +81,8 @@ const studentSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+studentSchema.index({ status: 1 });
+
 // ------------------- PRE-SAVE HOOK -------------------
 studentSchema.pre("save", async function () {
   if (!this.isModified("password")) return;

@@ -5,18 +5,64 @@ const Student = require("../model/studentModel");
 exports.getAttendance = async (req, res) => {
   try {
     const studentId = req.user.id;
+    const student = await Student.findById(studentId);
+
+    if (!student) {
+      return res.status(404).json({ success: false, message: "Student not found" });
+    }
 
     const attendance = await Attendance
       .find({ student: studentId })
       .sort({ date: -1 });
 
-    const totalPresent = attendance.filter(a => a.status === "Present").length;
-    const totalDays = attendance.length;
+    // Generate all dates from registration to today
+    const regDate = new Date(student.createdAt);
+    const registrationDate = new Date(regDate.getFullYear(), regDate.getMonth(), regDate.getDate(), 0, 0, 0, 0);
+    
+    const todayDate = new Date();
+    const today = new Date(todayDate.getFullYear(), todayDate.getMonth(), todayDate.getDate(), 0, 0, 0, 0);
+
+    const allDates = [];
+    const currentDate = new Date(registrationDate);
+    while (currentDate <= today) {
+      allDates.push(new Date(currentDate));
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+    // Map attendance records by date (normalized)
+    const attendanceMap = {};
+    attendance.forEach(a => {
+      const d = new Date(a.date);
+      d.setHours(0, 0, 0, 0);
+      const dateKey = d.getTime();
+      // Keep STAFF/ADMIN records over SYSTEM records for same date
+      if (!attendanceMap[dateKey] || a.markedBy !== 'SYSTEM') {
+        attendanceMap[dateKey] = a.toObject ? a.toObject() : a;
+      }
+    });
+
+    // Fill missing dates with absent
+    const completeAttendance = allDates.map(date => {
+      const dateKey = date.getTime();
+      if (attendanceMap[dateKey]) {
+        return attendanceMap[dateKey];
+      } else {
+        return {
+          student: studentId,
+          date: date,
+          status: "Absent",
+          markedBy: "SYSTEM"
+        };
+      }
+    });
+
+    const totalPresent = completeAttendance.filter(a => a.status === "Present").length;
+    const totalDays = completeAttendance.length;
     const attendancePercentage = totalDays > 0 ? Math.round((totalPresent / totalDays) * 100) : 0;
 
     res.status(200).json({ 
       success: true,
-      attendance,
+      attendance: completeAttendance,
       stats: {
         totalPresent,
         totalDays,
@@ -76,6 +122,7 @@ exports.markAttendance = async (req, res) => {
         date: today,
         entryTime: now,
         status: "Present",
+        markedBy: "STUDENT",
       });
 
       await attendance.save();
@@ -270,7 +317,7 @@ exports.markAttendanceByStaff = async (req, res) => {
 // -------- MANUAL ATTENDANCE ADD (ADMIN/STAFF) --------
 exports.addManualAttendance = async (req, res) => {
   try {
-    const { studentId, date, status } = req.body;
+    const { studentId, date, status, entryTime, exitTime } = req.body;
     const markedBy = req.user.role;
 
     if (!studentId || !date || !status) {
@@ -300,8 +347,15 @@ exports.addManualAttendance = async (req, res) => {
       date: attendanceDate,
       status,
       markedBy,
-      entryTime: new Date(),
+      entryTime: entryTime ? new Date(entryTime) : new Date(),
+      exitTime: exitTime ? new Date(exitTime) : null,
     });
+
+    if (attendance.entryTime && attendance.exitTime) {
+      const diffMs = attendance.exitTime - attendance.entryTime;
+      const diffHours = diffMs / (1000 * 60 * 60);
+      attendance.workingHours = Number(diffHours.toFixed(2));
+    }
 
     await attendance.save();
 
@@ -313,6 +367,54 @@ exports.addManualAttendance = async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Failed to add attendance" });
+  }
+};
+
+// -------- MANUAL EXIT (ADMIN/STAFF) --------
+exports.addManualExit = async (req, res) => {
+  try {
+    const { studentId, date, exitTime } = req.body;
+
+    if (!studentId || !date || !exitTime) {
+      return res.status(400).json({ message: "Student ID, date, and exit time required" });
+    }
+
+    const student = await Student.findOne({ studentId });
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const attendanceDate = new Date(date);
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    const attendance = await Attendance.findOne({
+      student: student._id,
+      date: attendanceDate,
+    });
+
+    if (!attendance) {
+      return res.status(404).json({ message: "Attendance record not found for this date" });
+    }
+
+    if (!attendance.entryTime) {
+      return res.status(400).json({ message: "Entry time not set" });
+    }
+
+    attendance.exitTime = new Date(exitTime);
+    const diffMs = attendance.exitTime - attendance.entryTime;
+    const diffHours = diffMs / (1000 * 60 * 60);
+    attendance.workingHours = Number(diffHours.toFixed(2));
+
+    await attendance.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Exit time added successfully",
+      attendance,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to add exit time" });
   }
 };
 
@@ -344,5 +446,35 @@ exports.markAbsentAtNoon = async () => {
     console.log("✅ Auto absent marking completed");
   } catch (error) {
     console.error("❌ Auto absent marking failed:", error);
+  }
+};
+
+// -------- AUTO EXIT AT CLOSING TIME (6 PM) --------
+exports.autoExitAtClosingTime = async () => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const closingTime = new Date();
+    closingTime.setHours(18, 0, 0, 0); // 6 PM
+
+    // Find all students with entry but no exit
+    const attendanceRecords = await Attendance.find({
+      date: today,
+      entryTime: { $exists: true },
+      exitTime: { $exists: false },
+    });
+
+    for (const record of attendanceRecords) {
+      record.exitTime = closingTime;
+      const diffMs = record.exitTime - record.entryTime;
+      const diffHours = diffMs / (1000 * 60 * 60);
+      record.workingHours = Number(diffHours.toFixed(2));
+      await record.save();
+    }
+
+    console.log(`✅ Auto exit at closing time completed - ${attendanceRecords.length} records updated`);
+  } catch (error) {
+    console.error("❌ Auto exit at closing time failed:", error);
   }
 };

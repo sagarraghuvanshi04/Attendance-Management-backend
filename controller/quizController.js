@@ -1,5 +1,35 @@
 const { Quiz, QuizAttempt } = require("../model/quizModel");
 
+// Get quiz results (ADMIN/STAFF)
+exports.getQuizResults = async (req, res) => {
+  try {
+    const { quizId } = req.params;
+
+    const quiz = await Quiz.findById(quizId);
+    if (!quiz) {
+      return res.status(404).json({ message: "Quiz not found" });
+    }
+
+    const results = await QuizAttempt.find({ quiz: quizId })
+      .populate("student", "name studentId email")
+      .sort({ score: -1, completedAt: 1 });
+
+    res.status(200).json({
+      success: true,
+      quiz: {
+        title: quiz.title,
+        date: quiz.date,
+        totalQuestions: quiz.questions.length,
+      },
+      results,
+      totalAttempts: results.length,
+    });
+  } catch (err) {
+    console.error("Get quiz results error:", err);
+    res.status(500).json({ message: "Failed to fetch quiz results" });
+  }
+};
+
 // Get today's quiz (STUDENT)
 exports.getTodayQuiz = async (req, res) => {
   try {
