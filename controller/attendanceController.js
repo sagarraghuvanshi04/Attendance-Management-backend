@@ -300,7 +300,7 @@ exports.addManualAttendance = async (req, res) => {
       date: attendanceDate,
       status,
       markedBy,
-      entryTime: status === "Present" ? new Date() : null,
+      entryTime: new Date(),
     });
 
     await attendance.save();
