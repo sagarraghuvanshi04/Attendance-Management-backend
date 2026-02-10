@@ -3,6 +3,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv");
 const cors = require("cors");
+const cron = require("node-cron");
 
 const connectToDb = require("./utils/db");
 
@@ -110,6 +111,14 @@ const createAdminIfNotExists = async () => {
 connectToDb()
   .then(async () => {
     await createAdminIfNotExists();
+    
+    // Setup cron job - Auto mark absent at 12 PM daily
+    cron.schedule("0 12 * * *", async () => {
+      const { markAbsentAtNoon } = require("./controller/attendanceController");
+      await markAbsentAtNoon();
+    });
+    console.log("✅ Cron job scheduled: Auto absent marking at 12 PM daily");
+    
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

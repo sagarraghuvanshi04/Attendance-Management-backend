@@ -8,6 +8,7 @@ const {
   markAttendanceByStaff,
   getTodayPresentStudents,
   getStudentMonthlyAttendance,
+  addManualAttendance,
 } = require("../controller/attendanceController");
 
 const authMiddleware = require("../middleware/authMiddleware");
@@ -64,6 +65,8 @@ router.get("/live", authMiddleware(["ADMIN"]), async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 });
+// Manual attendance endpoint
+router.post("/manual-add", authMiddleware(["ADMIN", "STAFF"]), addManualAttendance);
 router.get("/student/:studentId", authMiddleware(["STAFF", "ADMIN"]), async (req, res) => {
   try {
     const Attendance = require("../model/attendanceModel");

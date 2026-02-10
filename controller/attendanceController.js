@@ -266,3 +266,83 @@ exports.markAttendanceByStaff = async (req, res) => {
     res.status(500).json({ message: "Attendance marking failed" });
   }
 };
+
+
+// -------- MANUAL ATTENDANCE ADD (ADMIN/STAFF) --------
+exports.addManualAttendance = async (req, res) => {
+  try {
+    const { studentId, date, status } = req.body;
+    const markedBy = req.user.role;
+
+    if (!studentId || !date || !status) {
+      return res.status(400).json({ message: "Student ID, date, and status required" });
+    }
+
+    const student = await Student.findOne({ studentId });
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const attendanceDate = new Date(date);
+    attendanceDate.setHours(0, 0, 0, 0);
+
+    const existing = await Attendance.findOne({
+      student: student._id,
+      date: attendanceDate,
+    });
+
+    if (existing) {
+      return res.status(400).json({ message: "Attendance already exists for this date" });
+    }
+
+    const attendance = new Attendance({
+      student: student._id,
+      staff: req.user.id,
+      date: attendanceDate,
+      status,
+      markedBy,
+    });
+
+    await attendance.save();
+
+    res.status(201).json({
+      success: true,
+      message: `Attendance marked as ${status}`,
+      attendance,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Failed to add attendance" });
+  }
+};
+
+// -------- AUTO MARK ABSENT AT 12 PM --------
+exports.markAbsentAtNoon = async () => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const allStudents = await Student.find({ status: "Active" });
+
+    for (const student of allStudents) {
+      const existing = await Attendance.findOne({
+        student: student._id,
+        date: today,
+      });
+
+      if (!existing) {
+        await Attendance.create({
+          student: student._id,
+          staff: "SYSTEM",
+          date: today,
+          status: "Absent",
+          markedBy: "SYSTEM",
+        });
+      }
+    }
+
+    console.log("✅ Auto absent marking completed");
+  } catch (error) {
+    console.error("❌ Auto absent marking failed:", error);
+  }
+};
