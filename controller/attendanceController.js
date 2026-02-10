@@ -267,7 +267,6 @@ exports.markAttendanceByStaff = async (req, res) => {
   }
 };
 
-
 // -------- MANUAL ATTENDANCE ADD (ADMIN/STAFF) --------
 exports.addManualAttendance = async (req, res) => {
   try {
@@ -301,6 +300,7 @@ exports.addManualAttendance = async (req, res) => {
       date: attendanceDate,
       status,
       markedBy,
+      entryTime: status === "Present" ? new Date() : null,
     });
 
     await attendance.save();
