@@ -82,6 +82,7 @@ const studentSchema = new mongoose.Schema(
 );
 
 studentSchema.index({ status: 1 });
+studentSchema.index({ name: 1, studentId: 1, email: 1 });
 
 // ------------------- PRE-SAVE HOOK -------------------
 studentSchema.pre("save", async function () {

@@ -32,21 +32,17 @@ router.get("/attendance", authMiddleware(["STAFF", "ADMIN"]), getAttendanceLogs)
 router.get("/students", authMiddleware(["STAFF", "ADMIN"]), async (req, res) => {
   try {
     const Student = require("../model/studentModel");
-    const { search } = req.query;
+    const { page = 1, limit = 50 } = req.query;
     
-    let query = {};
-    if (search) {
-      query = {
-        $or: [
-          { name: { $regex: search, $options: "i" } },
-          { studentId: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } }
-        ]
-      };
-    }
+    const skip = (page - 1) * limit;
+    const students = await Student.find()
+      .select("name studentId email seat status shift course year expiry aadharLast4")
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean()
+      .exec();
     
-    const students = await Student.find(query).select("name studentId email seat").limit(10);
-    res.json({ success: true, students });
+    res.json({ success: true, students, page: parseInt(page), limit: parseInt(limit) });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
@@ -55,9 +51,27 @@ router.get("/students", authMiddleware(["STAFF", "ADMIN"]), async (req, res) => 
 router.get("/", authMiddleware(["ADMIN"]), async (req, res) => {
   try {
     const Staff = require("../model/staffModel");
-    const staff = await Staff.find({ role: { $ne: "ADMIN" } }).select("-password -otp -otpExpires").sort({ createdAt: -1 });
+    const { search } = req.query;
+    
+    let query = { role: { $ne: "ADMIN" } };
+    if (search) {
+      query = {
+        role: { $ne: "ADMIN" },
+        $or: [
+          { name: { $regex: search, $options: "i" } },
+          { staffId: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } }
+        ]
+      };
+    }
+    
+    const staff = await Staff.find(query)
+      .select("name staffId email role shift")
+      .sort({ createdAt: -1 })
+      .lean();
     res.json({ success: true, staff });
   } catch (err) {
+    console.error("Staff search error:", err);
     res.status(500).json({ message: "Server error" });
   }
 });

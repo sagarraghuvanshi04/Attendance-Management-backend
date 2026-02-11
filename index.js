@@ -126,6 +126,13 @@ connectToDb()
     });
     console.log("✅ Cron job scheduled: Auto exit at 6 PM daily");
     
+    // Setup cron job - Auto mark staff absent at 12 PM daily
+    cron.schedule("0 12 * * *", async () => {
+      const { markStaffAbsentAtNoon } = require("./controller/staffAttendanceController");
+      await markStaffAbsentAtNoon();
+    });
+    console.log("✅ Cron job scheduled: Auto absent marking for staff at 12 PM daily");
+    
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
     });

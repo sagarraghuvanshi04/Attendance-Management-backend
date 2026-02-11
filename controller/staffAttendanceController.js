@@ -91,12 +91,46 @@ exports.getStaffAttendanceById = async (req, res) => {
     
     const attendance = await StaffAttendance.find({ staff: staffId })
       .sort({ date: -1 })
-      .limit(30);
+      .limit(100);
 
     console.log('Found attendance records:', attendance.length);
     res.json({ success: true, attendance });
   } catch (err) {
     console.error("Get staff attendance by ID error:", err);
     res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+// Auto mark staff absent at 12 PM
+exports.markStaffAbsentAtNoon = async () => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const Staff = require("../model/staffModel");
+    const allStaff = await Staff.find({ isActive: true });
+    console.log(`📊 Total active staff: ${allStaff.length}`);
+
+    let markedCount = 0;
+    for (const staff of allStaff) {
+      const existing = await StaffAttendance.findOne({
+        staff: staff._id,
+        date: today,
+      });
+
+      if (!existing) {
+        await StaffAttendance.create({
+          staff: staff._id,
+          date: today,
+          status: "Absent",
+        });
+        markedCount++;
+      }
+    }
+
+    console.log(`✅ Auto absent marking for staff completed - ${markedCount} staff marked absent`);
+  } catch (error) {
+    console.error("❌ Auto absent marking for staff failed:", error);
   }
 };

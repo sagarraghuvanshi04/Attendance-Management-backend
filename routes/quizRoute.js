@@ -5,6 +5,7 @@ const {
   getTodayQuiz,
   submitQuiz,
   getLeaderboard,
+  getMyRecords,
   createQuiz,
   getAllQuizzes,
   getQuizResults,
@@ -12,8 +13,9 @@ const {
 
 // Student routes
 router.get("/today", authMiddleware(["STUDENT"]), getTodayQuiz);
-router.post("/submit", authMiddleware(["STUDENT"]), submitQuiz);
 router.get("/leaderboard", authMiddleware(["STUDENT"]), getLeaderboard);
+router.get("/my-records", authMiddleware(["STUDENT"]), getMyRecords);
+router.post("/submit", authMiddleware(["STUDENT"]), submitQuiz);
 
 // Admin/Staff routes
 router.post("/create", authMiddleware(["ADMIN", "STAFF"]), createQuiz);

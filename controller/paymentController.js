@@ -43,10 +43,13 @@ exports.approvePayment = async (req, res) => {
         await student.save();
       }
 
-      res.status(200).json({ 
-        success: true, 
-        message: "Payment approved and plan renewed",
-        payment 
+      // Send approval notification to student
+      await Notification.create({
+        student: payment.student._id,
+        title: "Payment Approved",
+        message: "Your payment has been approved. Your plan has been renewed.",
+        type: "success",
+        isRead: false
       });
     } else if (action === "reject") {
       payment.status = "Failed";
@@ -101,18 +104,13 @@ exports.submitPaymentRequest = async (req, res) => {
       description: `${plan} Plan Renewal`
     });
 
-    // Send notification to all staff and admin
-    const allStaff = await Staff.find({ isActive: true });
-    const notificationPromises = allStaff.map(staff => 
-      Notification.create({
-        staff: staff._id,
-        title: "New Payment Request",
-        message: `${student.name} (${student.studentId}) has submitted a payment request of ₹${amount} for ${plan} plan. Transaction ID: ${transactionId}`,
-        type: "info",
-        isRead: false
-      })
-    );
-    await Promise.all(notificationPromises);
+    // Send single notification to all staff and admin
+    await Notification.create({
+      title: "New Payment Request",
+      message: `${student.name} (${student.studentId}) has submitted a payment request of ₹${amount} for ${plan} plan. Transaction ID: ${transactionId}`,
+      type: "info",
+      isRead: false
+    });
 
     res.status(201).json({ 
       success: true, 

@@ -115,6 +115,31 @@ exports.submitQuiz = async (req, res) => {
   }
 };
 
+// Get student's previous quiz records (STUDENT)
+exports.getMyRecords = async (req, res) => {
+  try {
+    const studentId = req.user.id;
+
+    const records = await QuizAttempt.find({ student: studentId })
+      .populate("quiz", "title date")
+      .sort({ completedAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      records: records.map((r) => ({
+        _id: r._id,
+        quiz: r.quiz,
+        score: r.score,
+        totalQuestions: r.answers.length,
+        attemptedAt: r.completedAt,
+      })),
+    });
+  } catch (err) {
+    console.error("Get my records error:", err);
+    res.status(500).json({ message: "Failed to fetch quiz records" });
+  }
+};
+
 // Get leaderboard (STUDENT)
 exports.getLeaderboard = async (req, res) => {
   try {

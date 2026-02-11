@@ -342,12 +342,50 @@ exports.resetPassword = async (req, res) => {
 
 exports.getDashboardActivity = async (req, res) => {
   try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Get total active students
     const totalStudents = await Student.countDocuments({ status: "Active" });
+
+    // Get today's attendance data
+    const todayAttendance = await Attendance.find({
+      date: { $gte: today, $lt: tomorrow }
+    }).populate('student', 'name studentId seat');
+
+    // Calculate stats
+    const arrivals = todayAttendance.filter(a => a.entryTime && !a.exitTime).length;
+    const departures = todayAttendance.filter(a => a.exitTime).length;
+    const active = arrivals - departures; // Currently present
+
+    // Get recent scans (last 4 for dashboard)
+    const recentScans = await Attendance.find({
+      date: { $gte: today, $lt: tomorrow }
+    })
+    .populate('student', 'name studentId seat')
+    .sort({ updatedAt: -1 })
+    .limit(4)
+    .lean();
+
+    // Format scans for frontend
+    const formattedScans = recentScans.map(scan => ({
+      _id: scan._id,
+      type: scan.exitTime ? 'Exit' : 'Entry',
+      timestamp: scan.exitTime || scan.entryTime,
+      studentId: scan.student
+    }));
 
     res.status(200).json({
       success: true,
-      stats: { active: 0, arrivals: 0, departures: 0, totalStudents },
-      scans: []
+      stats: { 
+        active: Math.max(0, active), 
+        arrivals, 
+        departures, 
+        totalStudents 
+      },
+      scans: formattedScans
     });
   } catch (error) {
     console.error("Dashboard Activity Error:", error);

@@ -173,6 +173,19 @@ exports.getDashboardStats = async (req, res) => {
       exitTime: { $exists: false },
     });
 
+    // Get today's arrivals and departures
+    const arrivals = await Attendance.countDocuments({
+      date: today,
+      entryTime: { $exists: true },
+      status: "Present"
+    });
+
+    const departures = await Attendance.countDocuments({
+      date: today,
+      exitTime: { $exists: true },
+      status: "Present"
+    });
+
     const totalStaff = await Staff.countDocuments({ role: { $ne: "ADMIN" }, isActive: true });
 
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -227,11 +240,31 @@ exports.getDashboardStats = async (req, res) => {
       });
     }
 
+    // Get recent scans for Live Scan Feed
+    const recentScans = await Attendance.find({
+      date: today
+    })
+    .populate('student', 'name studentId')
+    .sort({ updatedAt: -1 })
+    .limit(4)
+    .lean();
+
+    const formattedScans = recentScans.map(scan => ({
+      type: scan.exitTime ? 'Exit' : 'Entry',
+      studentName: scan.student?.name || 'Unknown',
+      studentId: scan.student?.studentId || 'N/A',
+      time: scan.exitTime ? 
+        new Date(scan.exitTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) :
+        new Date(scan.entryTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+    }));
+
     res.status(200).json({
       success: true,
       stats: {
         totalStudents,
         activeStudents,
+        arrivals,
+        departures,
         totalStaff,
         revenue,
         availableSeats,
@@ -239,6 +272,7 @@ exports.getDashboardStats = async (req, res) => {
         todayRevenue: todayRevenueAmount,
         todayAttendance,
         totalSeats,
+        recentScans: formattedScans,
       },
       charts: {
         revenueChart: last7Days,

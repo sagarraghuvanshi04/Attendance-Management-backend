@@ -40,10 +40,22 @@ exports.getNotifications = async (req, res) => {
     
     let query = { isActive: true };
     
-    // For students: show all broadcast notifications (no createdBy filter needed)
-    // For staff/admin: show all notifications
     if (userRole === "STUDENT") {
-      query = { isActive: true };
+      query = { 
+        isActive: true,
+        $or: [
+          { createdBy: { $exists: true, $ne: null } },
+          { student: userId }
+        ]
+      };
+    } else if (userRole === "STAFF" || userRole === "ADMIN") {
+      query = {
+        isActive: true,
+        $or: [
+          { createdBy: { $exists: true, $ne: null } },
+          { student: { $exists: false }, staff: { $exists: false } }
+        ]
+      };
     }
     
     const notifications = await Notification.find(query)
@@ -86,7 +98,6 @@ exports.deleteNotification = async (req, res) => {
     res.status(500).json({ message: "Failed to delete notification" });
   }
 };
-
 
 // Mark notification as read
 exports.markAsRead = async (req, res) => {

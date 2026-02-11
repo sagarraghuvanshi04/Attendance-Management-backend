@@ -55,18 +55,13 @@ exports.getStudentDashboard = async (req, res) => {
           date: formatDate(n.createdAt),
           type: n.type || 'info'
         })),
-        rules: [
-          "Maintain complete silence in study areas",
-          "Mobile phones must be on silent mode",
-          "No food or drinks in reading zones",
-          "Keep your seat clean and organized",
-          "Return borrowed books on time"
-        ]
+        workingHours: todayAttendance?.workingHours || 0
       },
       todayAttendance: {
-        present: todayAttendance ? true : false,
+        status: todayAttendance?.status || "Not Marked",
         entryTime: todayAttendance?.entryTime || null,
-        exitTime: todayAttendance?.exitTime || null
+        exitTime: todayAttendance?.exitTime || null,
+        workingHours: todayAttendance?.workingHours || 0
       },
       stats: {
         totalDays,

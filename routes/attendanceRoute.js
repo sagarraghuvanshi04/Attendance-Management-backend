@@ -7,6 +7,9 @@ const {
   getTodayStats,
   markAttendanceByStaff,
   getTodayPresentStudents,
+  getTodayAllStudents,
+  getTodayArrivals,
+  getTodayDepartures,
   getStudentMonthlyAttendance,
   addManualAttendance,
   addManualExit,
@@ -22,6 +25,43 @@ router.post("/scan", authMiddleware(["STUDENT"]), markAttendance);
 router.post("/staff-scan", authMiddleware(["STAFF", "ADMIN"]), markAttendanceByStaff);
 router.get("/today-stats", authMiddleware(["STAFF", "ADMIN"]), getTodayStats);
 router.get("/today-present", authMiddleware(["STAFF", "ADMIN"]), getTodayPresentStudents);
+router.get("/today-all", authMiddleware(["STAFF", "ADMIN"]), getTodayAllStudents);
+router.get("/today-arrivals", authMiddleware(["STAFF", "ADMIN"]), getTodayArrivals);
+router.get("/today-departures", authMiddleware(["STAFF", "ADMIN"]), getTodayDepartures);
+router.get("/live-students", authMiddleware(["ADMIN"]), async (req, res) => {
+  try {
+    const Attendance = require("../model/attendanceModel");
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const liveStudents = await Attendance.find({
+      date: today,
+      entryTime: { $exists: true },
+      exitTime: { $exists: false },
+      status: "Present"
+    })
+    .populate('student', 'studentId name seat')
+    .sort({ entryTime: -1 });
+
+    const students = liveStudents
+      .filter(a => a.student)
+      .map(a => ({
+        _id: a.student._id,
+        studentId: a.student.studentId,
+        name: a.student.name,
+        seat: a.student.seat,
+        status: "Present",
+        entryTime: a.entryTime,
+        exitTime: null,
+        workingHours: 0
+      }));
+
+    res.status(200).json({ success: true, liveStudents: students });
+  } catch (err) {
+    console.error("Live students error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+});
 router.get("/student-monthly/:studentId", authMiddleware(["STAFF", "ADMIN"]), getStudentMonthlyAttendance);
 router.get("/all", authMiddleware(["ADMIN"]), async (req, res) => {
   try {
