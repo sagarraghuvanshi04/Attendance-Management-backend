@@ -31,10 +31,9 @@ const app = express();
 // ------------------ MIDDLEWARE ------------------
 app.use(
   cors({
-    origin: ["https://splibrary.vercel.app", "https://library-management-frontend-three-chi.vercel.app", "https://library-management-frontend-nine-nu.vercel.app", "http://localhost:5173", "http://localhost:3000"],
+    origin: "*",
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
-    credentials: true,
   })
 );
 
