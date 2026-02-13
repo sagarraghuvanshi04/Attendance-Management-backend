@@ -50,6 +50,48 @@ exports.markStaffAttendance = async (req, res) => {
   }
 };
 
+// Get today's all staff attendance (Admin)
+exports.getTodayAllStaffAttendance = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const Staff = require("../model/staffModel");
+    const allStaff = await Staff.find({ isActive: true });
+
+    const attendance = await StaffAttendance.find({
+      date: { $gte: today, $lt: tomorrow },
+    }).populate("staff", "staffId name role");
+
+    const attendanceMap = new Map();
+    attendance.forEach(a => {
+      attendanceMap.set(a.staff._id.toString(), a);
+    });
+
+    const result = allStaff.map(staff => {
+      const att = attendanceMap.get(staff._id.toString());
+      if (att) {
+        return att;
+      }
+      return {
+        _id: staff._id,
+        staff: staff,
+        staffId: staff.staffId,
+        name: staff.name,
+        status: "Absent",
+        date: today,
+      };
+    });
+
+    res.json({ success: true, attendance: result });
+  } catch (err) {
+    console.error("Get today staff attendance error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
 // Get all staff attendance (Admin)
 exports.getAllStaffAttendance = async (req, res) => {
   try {

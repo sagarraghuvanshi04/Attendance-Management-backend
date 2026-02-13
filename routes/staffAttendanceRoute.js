@@ -5,6 +5,7 @@ const {
   getAllStaffAttendance,
   getMyAttendance,
   getStaffAttendanceById,
+  getTodayAllStaffAttendance,
 } = require("../controller/staffAttendanceController");
 const authMiddleware = require("../middleware/authMiddleware");
 
@@ -13,6 +14,9 @@ router.post("/mark", authMiddleware(["STAFF", "ADMIN"]), markStaffAttendance);
 
 // Staff - Get my attendance
 router.get("/my", authMiddleware(["STAFF", "ADMIN"]), getMyAttendance);
+
+// Admin - Get today's all staff attendance (MUST be before /:staffId)
+router.get("/today-all", authMiddleware(["ADMIN"]), getTodayAllStaffAttendance);
 
 // Admin - Get all staff attendance
 router.get("/all", authMiddleware(["ADMIN"]), getAllStaffAttendance);
