@@ -66,6 +66,37 @@ app.get("/health", (req, res) => {
   res.json({ status: "ok", message: "Backend is running" });
 });
 
+// Cron trigger endpoints for external services
+app.get("/api/attendance/mark-absent-noon", async (req, res) => {
+  try {
+    const { markAbsentAtNoon } = require("./controller/attendanceController");
+    await markAbsentAtNoon();
+    res.json({ status: "success", message: "Absent marked at noon" });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+app.get("/api/attendance/auto-exit", async (req, res) => {
+  try {
+    const { autoExitAtClosingTime } = require("./controller/attendanceController");
+    await autoExitAtClosingTime();
+    res.json({ status: "success", message: "Auto exit completed" });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
+app.get("/api/staff-attendance/mark-absent-noon", async (req, res) => {
+  try {
+    const { markStaffAbsentAtNoon } = require("./controller/staffAttendanceController");
+    await markStaffAbsentAtNoon();
+    res.json({ status: "success", message: "Staff absent marked at noon" });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: error.message });
+  }
+});
+
 // 404 Route Handler
 app.use((req, res) => {
   res.status(404).json({ message: "Route not found" });
