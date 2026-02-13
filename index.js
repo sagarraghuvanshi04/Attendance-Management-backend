@@ -58,7 +58,7 @@ app.use("/api/payment-reminders", paymentReminderRoute);
 
 // Test Route
 app.get("/", (req, res) => {
-  res.send("SP Digital Lab Management System Backend is Running");
+  res.send("SP Digital Lab Management System Backend is Running - v2");
 });
 
 // Health check endpoint
