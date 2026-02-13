@@ -67,7 +67,17 @@ app.get("/health", (req, res) => {
 });
 
 // Cron trigger endpoints for external services
-app.get("/api/attendance/mark-absent-noon", async (req, res) => {
+const CRON_SECRET = process.env.CRON_SECRET || "cron-secret-key-2024";
+
+const verifyCronSecret = (req, res, next) => {
+  const secret = req.query.secret || req.headers['x-cron-secret'];
+  if (secret !== CRON_SECRET) {
+    return res.status(401).json({ status: "error", message: "Unauthorized" });
+  }
+  next();
+};
+
+app.get("/api/attendance/mark-absent-noon", verifyCronSecret, async (req, res) => {
   try {
     const { markAbsentAtNoon } = require("./controller/attendanceController");
     await markAbsentAtNoon();
@@ -77,7 +87,7 @@ app.get("/api/attendance/mark-absent-noon", async (req, res) => {
   }
 });
 
-app.get("/api/attendance/auto-exit", async (req, res) => {
+app.get("/api/attendance/auto-exit", verifyCronSecret, async (req, res) => {
   try {
     const { autoExitAtClosingTime } = require("./controller/attendanceController");
     await autoExitAtClosingTime();
@@ -87,7 +97,7 @@ app.get("/api/attendance/auto-exit", async (req, res) => {
   }
 });
 
-app.get("/api/staff-attendance/mark-absent-noon", async (req, res) => {
+app.get("/api/staff-attendance/mark-absent-noon", verifyCronSecret, async (req, res) => {
   try {
     const { markStaffAbsentAtNoon } = require("./controller/staffAttendanceController");
     await markStaffAbsentAtNoon();
