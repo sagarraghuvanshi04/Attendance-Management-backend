@@ -93,8 +93,12 @@ exports.getTodayStats = async (req, res) => {
 // ---------------- MARK ATTENDANCE ----------------
 exports.markAttendance = async (req, res) => {
   try {
-    const studentId = req.user.id;  
+    const studentId = req.user?.id;  
     const { staffId } = req.body;   
+
+    if (!studentId) {
+      return res.status(401).json({ message: "User not authenticated" });
+    }
 
     if (!staffId) {
       return res.status(400).json({ message: "Invalid QR code" });
