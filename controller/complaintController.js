@@ -19,21 +19,16 @@ exports.createComplaint = async (req, res) => {
       description,
     });
 
-    // Notify all staff and admin
+    // Notify all staff
     const allStaff = await Staff.find({ isActive: true });
-    const Admin = require("../model/adminModel");
-    const allAdmins = await Admin.find({ isActive: true });
-    
-    const notificationPromises = [
-      ...allStaff.map(staff => 
-        Notification.create({
-          staff: staff._id,
-          title: `New ${type} from Student`,
-          message: `${subject}`,
-          type: "info"
-        })
-      )
-    ];
+    const notificationPromises = allStaff.map(staff => 
+      Notification.create({
+        staff: staff._id,
+        title: `New ${type} from Student`,
+        message: `${subject}`,
+        type: "info"
+      })
+    );
     await Promise.all(notificationPromises);
 
     res.status(201).json({
