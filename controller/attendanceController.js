@@ -325,6 +325,41 @@ exports.getTodayPresentStudents = async (req, res) => {
   }
 };
 
+// -------- GET LIVE STUDENTS (CURRENTLY IN LIBRARY) --------
+exports.getLiveStudents = async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const liveStudents = await Attendance.find({
+      date: today,
+      entryTime: { $exists: true },
+      exitTime: { $exists: false },
+      status: "Present"
+    })
+    .populate('student', 'studentId name seat')
+    .sort({ entryTime: -1 });
+
+    const students = liveStudents
+      .filter(a => a.student)
+      .map(a => ({
+        _id: a.student._id,
+        studentId: a.student.studentId,
+        name: a.student.name,
+        seat: a.student.seat,
+        status: "Present",
+        entryTime: a.entryTime,
+        exitTime: null,
+        workingHours: 0
+      }));
+
+    res.status(200).json({ success: true, liveStudents: students });
+  } catch (err) {
+    console.error("Live students error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch live students" });
+  }
+};
+
 // ---------------- GET STUDENT MONTHLY ATTENDANCE (ADMIN) ----------------
 exports.getStudentMonthlyAttendance = async (req, res) => {
   try {
