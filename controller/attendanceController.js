@@ -181,8 +181,8 @@ exports.markAttendance = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Attendance marking failed" });
+    console.error("markAttendance error:", error.message, error.stack);
+    res.status(500).json({ message: "Attendance marking failed", error: error.message });
   }
 };
 
