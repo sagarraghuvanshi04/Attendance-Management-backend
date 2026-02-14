@@ -32,14 +32,6 @@ exports.createComplaint = async (req, res) => {
           message: `${subject}`,
           type: "info"
         })
-      ),
-      ...allAdmins.map(admin => 
-        Notification.create({
-          createdBy: admin._id,
-          title: `New ${type} from Student`,
-          message: `${subject}`,
-          type: "info"
-        })
       )
     ];
     await Promise.all(notificationPromises);
