@@ -59,15 +59,19 @@ exports.getTodayAllStaffAttendance = async (req, res) => {
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const Staff = require("../model/staffModel");
-    const allStaff = await Staff.find({ isActive: true });
+    const allStaff = await Staff.find({ isActive: true }).select("_id staffId name role");
+    console.log("Total active staff:", allStaff.length);
 
     const attendance = await StaffAttendance.find({
       date: { $gte: today, $lt: tomorrow },
     }).populate("staff", "staffId name role");
+    console.log("Today's attendance records:", attendance.length);
 
     const attendanceMap = new Map();
     attendance.forEach(a => {
-      attendanceMap.set(a.staff._id.toString(), a);
+      if (a.staff) {
+        attendanceMap.set(a.staff._id.toString(), a);
+      }
     });
 
     const result = allStaff.map(staff => {
@@ -88,7 +92,7 @@ exports.getTodayAllStaffAttendance = async (req, res) => {
     res.json({ success: true, attendance: result });
   } catch (err) {
     console.error("Get today staff attendance error:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
