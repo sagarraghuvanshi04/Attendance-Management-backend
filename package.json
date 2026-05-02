@@ -1,15 +1,11 @@
 {
-  "name": "backend",
+  "name": "attendance-management-backend",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
@@ -17,8 +13,8 @@
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.1.4",
-    "node-cron": "^4.2.1",
-    "nodemailer": "^7.0.12",
+    "morgan": "^1.10.0",
+    "winston": "^3.11.0",
     "nodemon": "^3.1.11"
   }
 }
