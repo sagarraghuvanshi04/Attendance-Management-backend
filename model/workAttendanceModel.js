@@ -9,8 +9,9 @@ const workAttendanceSchema = new mongoose.Schema({
   workingHours: { type: Number, default: 0 },
   shiftStatus: { type: String, enum: ["Completed", "Incomplete", "Absent"], default: "Absent" },
 
-  punchInSelfie: { type: String, default: null },   // base64 or URL
+  punchInSelfie: { type: String, default: null },
   punchOutSelfie: { type: String, default: null },
+  punchInFaceDescriptor: { type: [Number], default: undefined }, // stored at punch-in for verification
 
   punchInLocation: {
     latitude: { type: Number },

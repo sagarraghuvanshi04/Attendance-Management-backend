@@ -12,17 +12,24 @@ const todayStart = () => {
 // ---- PUNCH IN ----
 exports.punchIn = async (req, res) => {
   try {
-    const { selfie, latitude, longitude, address } = req.body;
+    const { selfie, latitude, longitude, address, faceDescriptor } = req.body;
     if (!selfie) return res.status(400).json({ message: "Selfie is required" });
+    if (!faceDescriptor || !Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) {
+      return res.status(400).json({ message: "Valid face data is required (128 values)" });
+    }
 
     const today = todayStart();
     const existing = await WorkAttendance.findOne({ employee: req.user.id, date: today });
     if (existing && existing.punchIn) return res.status(400).json({ message: "Already punched in today" });
 
+    // Also save to user profile for long-term reference
+    await User.findByIdAndUpdate(req.user.id, { faceDescriptor });
+
     const now = new Date();
     let record = existing || new WorkAttendance({ employee: req.user.id, date: today });
     record.punchIn = now;
     record.punchInSelfie = selfie;
+    record.punchInFaceDescriptor = faceDescriptor; // store on record for punch-out comparison
     record.punchInLocation = { latitude, longitude, address };
     record.shiftStatus = "Incomplete";
     record.validationStatus = "Pending";
@@ -38,13 +45,48 @@ exports.punchIn = async (req, res) => {
 // ---- PUNCH OUT ----
 exports.punchOut = async (req, res) => {
   try {
-    const { selfie, latitude, longitude, address } = req.body;
+    const { selfie, latitude, longitude, address, faceDescriptor } = req.body;
     if (!selfie) return res.status(400).json({ message: "Selfie is required" });
+    if (!faceDescriptor || !Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) {
+      return res.status(400).json({ message: "Valid face data is required (128 values)" });
+    }
 
     const today = todayStart();
     const record = await WorkAttendance.findOne({ employee: req.user.id, date: today });
     if (!record || !record.punchIn) return res.status(400).json({ message: "Punch in first" });
     if (record.punchOut) return res.status(400).json({ message: "Already punched out today" });
+
+    // ── FACE VERIFICATION ──────────────────────────────────────────
+    // Always compare against the descriptor stored AT punch-in time
+    // This is the most reliable source — not the user profile
+    const storedDescriptor = record.punchInFaceDescriptor;
+
+    if (!storedDescriptor || storedDescriptor.length !== 128) {
+      // Fallback: try user profile descriptor
+      const user = await User.findById(req.user.id);
+      if (!user.faceDescriptor || user.faceDescriptor.length !== 128) {
+        logger.warn(`No face descriptor found for user=${req.user.id}, skipping verification`);
+      } else {
+        const distance = euclideanDistance(user.faceDescriptor, faceDescriptor);
+        logger.info(`Face match (profile fallback) distance=${distance.toFixed(4)} user=${req.user.id}`);
+        if (distance > 0.5) {
+          return res.status(403).json({
+            success: false,
+            message: `❌ Face verification failed! The face used for punch-out does not match the punch-in face. Distance: ${distance.toFixed(4)}. Proxy attendance is not allowed.`,
+          });
+        }
+      }
+    } else {
+      const distance = euclideanDistance(storedDescriptor, faceDescriptor);
+      logger.info(`Face match distance=${distance.toFixed(4)} user=${req.user.id}`);
+      if (distance > 0.5) {
+        return res.status(403).json({
+          success: false,
+          message: `❌ Face verification failed! The face used for punch-out does not match the punch-in face. Distance: ${distance.toFixed(4)}. Proxy attendance is not allowed.`,
+        });
+      }
+    }
+    // ── END FACE VERIFICATION ──────────────────────────────────────
 
     const now = new Date();
     record.punchOut = now;
@@ -62,6 +104,11 @@ exports.punchOut = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+// ── Helper: Euclidean distance between two 128-float descriptors ──
+function euclideanDistance(a, b) {
+  return Math.sqrt(a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0));
+}
 
 // ---- GET MY ATTENDANCE ----
 exports.getMyAttendance = async (req, res) => {

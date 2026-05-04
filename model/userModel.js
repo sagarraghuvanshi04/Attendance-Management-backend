@@ -9,6 +9,7 @@ const userSchema = new mongoose.Schema({
   department: { type: String },
   managerId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   isActive: { type: Boolean, default: true },
+  faceDescriptor: { type: [Number], default: undefined }, // 128-float array from face-api.js
   otp: { type: String, select: false },
   otpExpires: { type: Date, select: false },
 }, { timestamps: true });
