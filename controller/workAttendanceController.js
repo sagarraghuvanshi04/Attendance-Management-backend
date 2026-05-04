@@ -9,31 +9,53 @@ const todayStart = () => {
   return d;
 };
 
+// ── Helper: Euclidean distance between two 128-float face descriptors ──
+function euclideanDistance(a, b) {
+  if (!a || !b || a.length !== 128 || b.length !== 128) return Infinity;
+  let sum = 0;
+  for (let i = 0; i < 128; i++) sum += (a[i] - b[i]) ** 2;
+  return Math.sqrt(sum);
+}
+
+function validateDescriptor(descriptor) {
+  return (
+    Array.isArray(descriptor) &&
+    descriptor.length === 128 &&
+    descriptor.every((v) => typeof v === "number" && isFinite(v))
+  );
+}
+
 // ---- PUNCH IN ----
 exports.punchIn = async (req, res) => {
   try {
     const { selfie, latitude, longitude, address, faceDescriptor } = req.body;
+
     if (!selfie) return res.status(400).json({ message: "Selfie is required" });
-    if (!faceDescriptor || !Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) {
-      return res.status(400).json({ message: "Valid face data is required (128 values)" });
+    if (!validateDescriptor(faceDescriptor)) {
+      return res.status(400).json({ message: "Invalid face data. Ensure your face is clearly visible and try again." });
     }
 
     const today = todayStart();
     const existing = await WorkAttendance.findOne({ employee: req.user.id, date: today });
-    if (existing && existing.punchIn) return res.status(400).json({ message: "Already punched in today" });
-
-    // Also save to user profile for long-term reference
-    await User.findByIdAndUpdate(req.user.id, { faceDescriptor });
+    if (existing?.punchIn) {
+      return res.status(400).json({ message: "Already punched in today" });
+    }
 
     const now = new Date();
-    let record = existing || new WorkAttendance({ employee: req.user.id, date: today });
+    const record = existing || new WorkAttendance({ employee: req.user.id, date: today });
+
     record.punchIn = now;
     record.punchInSelfie = selfie;
-    record.punchInFaceDescriptor = faceDescriptor; // store on record for punch-out comparison
+    record.punchInFaceDescriptor = faceDescriptor; // 128 floats — used for punch-out verification
     record.punchInLocation = { latitude, longitude, address };
     record.shiftStatus = "Incomplete";
     record.validationStatus = "Pending";
+
     await record.save();
+
+    // Also update user profile descriptor for long-term reference
+    await User.findByIdAndUpdate(req.user.id, { faceDescriptor });
+
     logger.info(`Punch IN: user=${req.user.id} at ${now.toISOString()}`);
     res.status(201).json({ success: true, message: "Punched in successfully", record });
   } catch (err) {
@@ -46,47 +68,42 @@ exports.punchIn = async (req, res) => {
 exports.punchOut = async (req, res) => {
   try {
     const { selfie, latitude, longitude, address, faceDescriptor } = req.body;
+
     if (!selfie) return res.status(400).json({ message: "Selfie is required" });
-    if (!faceDescriptor || !Array.isArray(faceDescriptor) || faceDescriptor.length !== 128) {
-      return res.status(400).json({ message: "Valid face data is required (128 values)" });
+    if (!validateDescriptor(faceDescriptor)) {
+      return res.status(400).json({ message: "Invalid face data. Ensure your face is clearly visible and try again." });
     }
 
     const today = todayStart();
     const record = await WorkAttendance.findOne({ employee: req.user.id, date: today });
-    if (!record || !record.punchIn) return res.status(400).json({ message: "Punch in first" });
+
+    if (!record?.punchIn) return res.status(400).json({ message: "You must punch in before punching out" });
     if (record.punchOut) return res.status(400).json({ message: "Already punched out today" });
 
-    // ── FACE VERIFICATION ──────────────────────────────────────────
-    // Always compare against the descriptor stored AT punch-in time
-    // This is the most reliable source — not the user profile
+    // ── FACE VERIFICATION ─────────────────────────────────────────────────
     const storedDescriptor = record.punchInFaceDescriptor;
 
-    if (!storedDescriptor || storedDescriptor.length !== 128) {
-      // Fallback: try user profile descriptor
-      const user = await User.findById(req.user.id);
-      if (!user.faceDescriptor || user.faceDescriptor.length !== 128) {
-        logger.warn(`No face descriptor found for user=${req.user.id}, skipping verification`);
-      } else {
-        const distance = euclideanDistance(user.faceDescriptor, faceDescriptor);
-        logger.info(`Face match (profile fallback) distance=${distance.toFixed(4)} user=${req.user.id}`);
-        if (distance > 0.5) {
-          return res.status(403).json({
-            success: false,
-            message: `❌ Face verification failed! The face used for punch-out does not match the punch-in face. Distance: ${distance.toFixed(4)}. Proxy attendance is not allowed.`,
-          });
-        }
-      }
-    } else {
-      const distance = euclideanDistance(storedDescriptor, faceDescriptor);
-      logger.info(`Face match distance=${distance.toFixed(4)} user=${req.user.id}`);
-      if (distance > 0.5) {
-        return res.status(403).json({
-          success: false,
-          message: `❌ Face verification failed! The face used for punch-out does not match the punch-in face. Distance: ${distance.toFixed(4)}. Proxy attendance is not allowed.`,
-        });
-      }
+    if (!validateDescriptor(storedDescriptor)) {
+      // Descriptor missing from record — hard block, do not allow punch-out
+      logger.error(`Punch-out blocked: no valid punchInFaceDescriptor on record for user=${req.user.id}`);
+      return res.status(403).json({
+        success: false,
+        message: "Face verification failed: no punch-in face data found. Please contact your administrator.",
+      });
     }
-    // ── END FACE VERIFICATION ──────────────────────────────────────
+
+    const distance = euclideanDistance(storedDescriptor, faceDescriptor);
+    logger.info(`Face verification: user=${req.user.id} distance=${distance.toFixed(4)} threshold=0.5`);
+
+    if (distance > 0.5) {
+      return res.status(403).json({
+        success: false,
+        faceMatch: false,
+        distance: parseFloat(distance.toFixed(4)),
+        message: `Face verification failed. The face scanned for punch-out does not match the punch-in face (distance: ${distance.toFixed(4)}). Proxy attendance is not allowed.`,
+      });
+    }
+    // ── END FACE VERIFICATION ─────────────────────────────────────────────
 
     const now = new Date();
     record.punchOut = now;
@@ -96,19 +113,15 @@ exports.punchOut = async (req, res) => {
     const diffHours = (now - record.punchIn) / (1000 * 60 * 60);
     record.workingHours = parseFloat(diffHours.toFixed(2));
     record.shiftStatus = diffHours >= 8 ? "Completed" : "Incomplete";
+
     await record.save();
-    logger.info(`Punch OUT: user=${req.user.id} hours=${record.workingHours}`);
-    res.json({ success: true, message: "Punched out successfully", record });
+    logger.info(`Punch OUT: user=${req.user.id} hours=${record.workingHours} faceDistance=${distance.toFixed(4)}`);
+    res.json({ success: true, faceMatch: true, message: "Punched out successfully", record });
   } catch (err) {
     logger.error(`punchOut error: ${err.message}`);
     res.status(500).json({ message: err.message });
   }
 };
-
-// ── Helper: Euclidean distance between two 128-float descriptors ──
-function euclideanDistance(a, b) {
-  return Math.sqrt(a.reduce((sum, val, i) => sum + Math.pow(val - b[i], 2), 0));
-}
 
 // ---- GET MY ATTENDANCE ----
 exports.getMyAttendance = async (req, res) => {

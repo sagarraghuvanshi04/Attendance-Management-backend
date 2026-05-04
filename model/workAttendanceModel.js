@@ -11,7 +11,13 @@ const workAttendanceSchema = new mongoose.Schema({
 
   punchInSelfie: { type: String, default: null },
   punchOutSelfie: { type: String, default: null },
-  punchInFaceDescriptor: { type: [Number], default: undefined }, // stored at punch-in for verification
+  punchInFaceDescriptor: {
+    type: [Number],
+    validate: {
+      validator: (v) => !v || v.length === 0 || v.length === 128,
+      message: "Face descriptor must be exactly 128 values",
+    },
+  },
 
   punchInLocation: {
     latitude: { type: Number },
